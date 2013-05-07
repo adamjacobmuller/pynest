@@ -6,16 +6,16 @@ for command line mode create pynest.json:
         "password": "somepassword"
     }
 
-Usage: pynest.py [options]
+    Usage: pynest.py [options]
 
-Options:
-  -h, --help            show this help message and exit
-  -s STRUCTURES, --structure=STRUCTURES
-  -t THERMOSTATS, --thermostat=THERMOSTATS
-  -u, --all-thermostats
-  -w, --all-structures  
-  -d, --debug           
-  -l, --list            
+    Options:
+      -h, --help            show this help message and exit
+      -s STRUCTURES, --structure=STRUCTURES
+      -t THERMOSTATS, --thermostat=THERMOSTATS
+      -u, --all-thermostats
+      -w, --all-structures  
+      -d, --debug           
+      -l, --list            
 
 usage:
 set fan mode on all thermostats in structure (name=Home) to duty-cycle
