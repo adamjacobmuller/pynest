@@ -10,6 +10,23 @@ def j_dump(data):
     print json.dumps(data, indent=4)
 
 
+def string_to_bool(string):
+    stbmap = {
+        'true': True,
+        'false': False,
+        'on': True,
+        'off': False
+    }
+    try:
+        return stbmap[string.lower()]
+    except KeyError:
+        raise Exception("unable to interpret %s as a boolean value expecting (on|off|true|false)" % string)
+
+
+class NothingToDo(Exception):
+    pass
+
+
 class NestThermostat():
     def __init__(self, structure, thermostat, data, serial):
         self.name = thermostat['name']
@@ -34,10 +51,72 @@ class NestThermostat():
         )
 
     def set_thermostat_shared(self, **kwargs):
+        equal = True
+
+        for key in kwargs:
+            if self.shared[key] != kwargs[key]:
+                equal = False
+                break
+
+        if equal is True:
+            raise NothingToDo()
         return self.structure.account._make_request("/v2/put/shared." + self.serial, data = kwargs)
 
     def set_thermostat_device(self, **kwargs):
+        equal = True
+        for key in kwargs:
+            if self.device[key] != kwargs[key]:
+                equal = False
+                break
+
+        if equal is True:
+            raise NothingToDo()
         return self.structure.account._make_request("/v2/put/device." + self.serial, data = kwargs)
+
+    def set_auto_away(self, enabled):
+        # AKA Nest API:
+        # {"auto_away_enable":true}
+        return self.set_thermostat_device(auto_away_enable = string_to_bool(enabled))
+
+    def set_learning(self, enabled):
+        # AKA Nest API:
+        # {"learning_mode":true}
+        return self.set_thermostat_device(learning_mode = string_to_bool(enabled))
+
+    def set_preconditioning(self, enabled):
+        # AKA Nest UI:
+        # time-to-temp
+        # AKA Nest API:
+        # {"preconditioning_enabled":true}
+        return self.set_thermostat_device(preconditioning_enabled = string_to_bool(enabled))
+
+    def set_radiant_control(self, enabled):
+        # AKA Nest UI:
+        # true radiant
+        # AKA Nest API:
+        # {"radiant_control_enabled":true}
+        return self.set_thermostat_device(radiant_control_enabled = string_to_bool(enabled))
+
+    def set_sunlight_correction(self, enabled):
+        # AKA Nest UI:
+        # sunblock
+        # AKA Nest API:
+        # {"sunlight_correction_enabled":false}
+        return self.set_thermostat_device(sunlight_correction_enabled = string_to_bool(enabled))
+
+    def set_fan_cooling(self, enabled):
+        # AKA Nest UI:
+        # airwave
+        # AKA Nest API:
+        # {"fan_cooling_enabled":true}
+        return self.set_thermostat_device(fan_cooling_enabled = string_to_bool(enabled))
+
+    def set_auto_dehumidify(self, enabled):
+        # AKA Nest UI:
+        # cool-to-dry
+        # AKA Nest API:
+        # {"auto_dehum_enabled":true}
+        return self.set_thermostat_device(auto_dehum_enabled = string_to_bool(enabled))
 
     def set_temperature(self, temperature):
         # temp in c
@@ -75,11 +154,24 @@ class NestStructure():
         self.away = structure['away']
         self.uuid = uuid
         self.thermostat_list = []
+        self.structure = structure
         for device in structure['devices']:
             serial = device[7:]
             self.thermostat_list.append(NestThermostat(self, data['shared'][serial], data, serial))
 
     def set_structure(self, **kwargs):
+        equal = True
+        skip = [ 'away_timestamp']
+        for key in kwargs:
+            if key in skip:
+                continue
+            if self.structure[key] != kwargs[key]:
+                equal = False
+                break
+
+        if equal is True:
+            raise NothingToDo()
+
         return self.account._make_request("/v2/put/structure." + self.uuid, data = kwargs)
 
     def set_away(self, away = True):
@@ -258,6 +350,8 @@ if __name__ == "__main__":
                 print "        %s" % thermostat
         sys.exit(0)
 
+    control = False
+
     if options.all_structures:
         control = "structures"
         structures = [ {'all': True}]
@@ -280,7 +374,14 @@ if __name__ == "__main__":
         'fan-duty-cycle': ( 'set_fan_duty_cycle', 1),
         'fan-timer-duration': ( 'set_fan_timer_duration', 1),
         'fan-timer-timeout': ( 'set_fan_timer_timeout', 1),
-        'mode': ( 'set_mode', 1)
+        'mode': ( 'set_mode', 1),
+        'auto-away': ( 'set_auto_away', 1),
+        'auto-schedule': ( 'set_learning', 1),
+        'early-on': ( 'set_preconditioning', 1),
+        'true-radiant': ( 'set_radiant_control', 1),
+        'cool-to-dry': ( 'set_auto_dehumidify', 1),
+        'sunblock': ( 'set_sunlight_correction', 1),
+        'airwave': ('set_fan_cooling', 1),
     }
 
     structure_command_map = {
@@ -296,11 +397,14 @@ if __name__ == "__main__":
                 for thermostat_kwargs in thermostats:
                     for thermostat in structure.thermostats(**thermostat_kwargs):
                         nest_controls.append(thermostat)
-    if control == "structures":
+    elif control == "structures":
         command_map = structure_command_map
         for structure_kwargs in structures:
             for structure in nest.structures(**structure_kwargs):
                 nest_controls.append(structure)
+    else:
+        print "Expecting a valid combination of -s/-t/-w/-u"
+        sys.exit(1)
 
     print "Controlling:"
     for nest_control in nest_controls:
@@ -311,11 +415,20 @@ if __name__ == "__main__":
         args = list(args_s)
         while len(args) > 0:
             command = args.pop(0)
-            function = command_map[command]
+            try:
+                function = command_map[command]
+            except KeyError:
+                print "%s is not a valid command for a %s" % (command, control[:-1])
+                sys.exit(1)
             method = getattr(nest_control, function[0])
             function_args = []
             for i in range(0, function[1]):
                 function_args.append(args.pop(0))
-
-            method(*function_args)
-            print "%s(%s)" % (method, function_args)
+            try:
+                sys.stdout.write("%s(%s)" % (method, function_args))
+                sys.stdout.flush()
+                result = method(*function_args)
+                sys.stdout.write(" = %s\n" % result)
+            except NothingToDo:
+                sys.stdout.write(" = skipped - NothingToDo\n")
+                pass
