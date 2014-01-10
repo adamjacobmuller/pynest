@@ -66,6 +66,20 @@ def b2i(value):
         return 'U'
 
 
+def pick_object(object_list, object_type):
+    otl = len(object_type)
+    for obj in object_list:
+        if obj['object_key'][0:otl] == object_type:
+            return obj
+
+
+def pick_objects(object_list, object_type):
+    otl = len(object_type)
+    for obj in object_list:
+        if obj['object_key'][0:otl] == object_type:
+            yield obj
+
+
 class NestThermostat():
     def __init__(self, structure, thermostat, data, serial):
         self.name = thermostat['name']
@@ -75,9 +89,9 @@ class NestThermostat():
         self.heat = thermostat['hvac_heater_state']
         self.serial = serial
         self.structure = structure
-        self.track = data['track'][serial]
-        self.shared = data['shared'][serial]
-        self.device = data['device'][serial]
+        self.track = pick_object(data['objects'], 'track.%s' % serial)['value']
+        self.shared = pick_object(data['objects'], 'shared.%s' % serial)['value']
+        self.device = pick_object(data['objects'], 'device.%s' % serial)['value']
 
     def __repr__(self):
         return "<NestThermostat %s / Serial %s [ Temperature: %s / Heat: %s / Cool: %s / Fan: %s ]>" % (
@@ -218,7 +232,7 @@ class NestStructure():
         self.structure = structure
         for device in structure['devices']:
             serial = device[7:]
-            self.thermostat_list.append(NestThermostat(self, data['shared'][serial], data, serial))
+            self.thermostat_list.append(NestThermostat(self, pick_object(data['objects'], 'shared.%s' % serial)['value'], data, serial))
 
     def set_structure(self, **kwargs):
         equal = True
@@ -330,10 +344,10 @@ class NestAccount():
                 return structure
 
     def load(self):
-        req = self._make_request("/v2/mobile/user.%s" % self.userid)
+        req = self._make_request("/v5/mobile/user.%s" % self.userid)
         self.structure_list = []
-        for structure in req['structure']:
-            self.structure_list.append(NestStructure(self, req['structure'][structure], req, uuid = structure))
+        for structure in pick_objects(req['objects'], 'structure'):
+            self.structure_list.append(NestStructure(self, structure['value'], req, uuid = structure['object_key']))
 
     def _make_request(self, url, data = None, headers = {}):
         if self.res is None:
