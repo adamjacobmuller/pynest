@@ -4,6 +4,9 @@ import json
 import pprint
 import time
 import sys
+import os
+
+from sh import rrdtool
 
 
 def j_dump(data):
@@ -25,6 +28,42 @@ def string_to_bool(string):
 
 class NothingToDo(Exception):
     pass
+
+
+def rrdupdate(base, filename, values):
+    filename = '%s/%s.rrd' % ( base, filename)
+    if os.path.exists(filename) is False:
+        rras = [
+            "RRA:AVERAGE:0.5:1:24000 ",
+            "RRA:AVERAGE:0.5:12:24000",
+            "RRA:AVERAGE:0.5:30:24000",
+            "RRA:AVERAGE:0.5:120:24000",
+            "RRA:AVERAGE:0.5:1440:24000",
+            "RRA:MIN:0.5:1:24000 ",
+            "RRA:MIN:0.5:12:24000",
+            "RRA:MIN:0.5:30:24000",
+            "RRA:MIN:0.5:120:24000",
+            "RRA:MIN:0.5:1440:24000",
+            "RRA:MAX:0.5:1:24000 ",
+            "RRA:MAX:0.5:12:24000",
+            "RRA:MAX:0.5:30:24000",
+            "RRA:MAX:0.5:120:24000",
+            "RRA:MAX:0.5:1440:24000"]
+        keys = ["DS:%s:GAUGE:120:U:U" % value[0][0:19] for value in values]
+        command = [ 'create', filename, '-s', '60'] + keys + rras
+        rrdtool(*command)
+    update = 'N:%s' % ':'.join([str(value[1]) for value in values])
+
+    rrdtool('update', filename, update)
+
+
+def b2i(value):
+    if value is True:
+        return 1
+    elif value is False:
+        return 0
+    else:
+        return 'U'
 
 
 class NestThermostat():
@@ -49,6 +88,28 @@ class NestThermostat():
             self.cool,
             self.fan
         )
+
+    def to_rrd(self, base_dir):
+        vars = [
+            ('hvac_ac_state', b2i(self.shared['hvac_ac_state'])),
+            ('hvac_heater_state', b2i(self.shared['hvac_heater_state'])),
+            ('hvac_fan_state', b2i(self.shared['hvac_fan_state'])),
+            ('hvac_alt_heat_x2_state', b2i(self.shared['hvac_alt_heat_x2_state'])),
+            ('compressor_lockout_enabled', b2i(self.shared['compressor_lockout_enabled'])),
+            ('can_heat', b2i(self.shared['can_heat'])),
+            ('hvac_aux_heater_state', b2i(self.shared['hvac_aux_heater_state'])),
+            ('target_change_pending', b2i(self.shared['target_change_pending'])),
+            ('hvac_heat_x2_state', b2i(self.shared['hvac_heat_x2_state'])),
+            ('hvac_heat_x3_state', b2i(self.shared['hvac_heat_x3_state'])),
+            ('hvac_cool_x2_state', b2i(self.shared['hvac_cool_x2_state'])),
+            ('hvac_emer_heat_state', b2i(self.shared['hvac_emer_heat_state'])),
+            ('can_cool', b2i(self.shared['can_cool'])),
+            ('hvac_alt_heat_state', b2i(self.shared['hvac_alt_heat_state'])),
+            ('current_temp', self.shared['current_temperature']),
+            ('target_temp_low', self.shared['target_temperature_low']),
+            ('target_temp_high', self.shared['target_temperature_high'])
+        ]
+        rrdupdate(base_dir, "thermostat-%s" % self.serial, vars)
 
     def set_thermostat_shared(self, **kwargs):
         equal = True
@@ -187,6 +248,9 @@ class NestStructure():
             self.away
         )
 
+    def to_rrd(self, base_dir):
+        return "%d" % self.away
+
     def thermostats(self, **kwargs):
         try:
             if kwargs['all'] is True:
@@ -316,6 +380,7 @@ def get_args():
     parser.add_option("-w", "--all-structures", dest="all_structures", action="store_true", default = False)
     parser.add_option("-d", "--debug", dest="debug", action="store_true", default = False)
     parser.add_option("-l", "--list", dest="list", action="store_true", default = False)
+    parser.add_option("-r", "--rrd", dest="rrd", default = False)
 
     return parser.parse_args()
 
@@ -347,6 +412,16 @@ if __name__ == "__main__":
         for structure in nest.structures():
             print "    %s" % structure
             for thermostat in structure.thermostats():
+                print "        %s" % thermostat
+        sys.exit(0)
+
+    if options.rrd:
+        print nest
+        for structure in nest.structures():
+            structure.to_rrd(options.rrd)
+            print "    %s" % structure
+            for thermostat in structure.thermostats():
+                thermostat.to_rrd(options.rrd)
                 print "        %s" % thermostat
         sys.exit(0)
 
