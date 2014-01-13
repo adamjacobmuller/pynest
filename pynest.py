@@ -125,6 +125,45 @@ class NestThermostat():
         ]
         rrdupdate(base_dir, "thermostat-%s" % self.serial, vars)
 
+        vars.append(('target_temperature', self.shared['target_temperature']))
+        rrdupdate(base_dir, "thermostat-c-%s" % self.serial, vars)
+
+        if self.device['time_to_target'] > 0:
+            self.device['time_to_target'] - time.time()
+        else:
+            time_to_target = 'U'
+
+        device_vars = [
+            ('leaf_away_low', self.device['leaf_away_low']),
+            ('leaf_away_high', self.device['leaf_away_high']),
+            ('leaf_threshold_heat', self.device['leaf_threshold_heat']),
+            ('leaf_threshold_cool', self.device['leaf_threshold_cool']),
+            ('compressor_lockout_leaf', self.device['compressor_lockout_leaf']),
+            ('leaf_schedule_delta', self.device['leaf_schedule_delta']),
+            ('leaf', b2i(self.device['leaf'])),
+
+            ('fan_cooling_state', b2i(self.device['fan_cooling_state'])),
+            ('fan_cooling_enabled', b2i(self.device['fan_cooling_enabled'])),
+            ('target_humidity_enabled', b2i(self.device['target_humidity_enabled'])),
+            ('target_humidity', self.device['target_humidity']),
+            ('current_humidity', self.device['current_humidity']),
+            ('target_time_confidence', self.device['target_time_confidence']),
+            ('auto_dehum_enabled', b2i(self.device['auto_dehum_enabled'])),
+            ('battery_level', self.device['battery_level']),
+            ('time_to_target', time_to_target),
+            ('away_temp_low', self.device['away_temperature_low']),
+            ('away_temp_high', self.device['away_temperature_high']),
+            ('away_temp_low_enabled', b2i(self.device['away_temperature_low_enabled'])),
+            ('away_temp_high_enabled', b2i(self.device['away_temperature_high_enabled'])),
+            ('safety_temp_activating_hvac', b2i(self.device['safety_temp_activating_hvac'])),
+            ('upper_safety_temp_enabled', b2i(self.device['upper_safety_temp_enabled'])),
+            ('lower_safety_temp_enabled', b2i(self.device['lower_safety_temp_enabled'])),
+            ('hvac_safety_shutoff_active', b2i(self.device['hvac_safety_shutoff_active'])),
+            ('upper_safety_temp', self.device['upper_safety_temp']),
+            ('lower_safety_temp', self.device['lower_safety_temp']),
+        ]
+        rrdupdate(base_dir, "device-%s" % self.serial, device_vars)
+
     def set_thermostat_shared(self, **kwargs):
         equal = True
 
@@ -344,10 +383,10 @@ class NestAccount():
                 return structure
 
     def load(self):
-        req = self._make_request("/v5/mobile/user.%s" % self.userid)
+        self.user_data = self._make_request("/v5/mobile/user.%s" % self.userid)
         self.structure_list = []
-        for structure in pick_objects(req['objects'], 'structure'):
-            self.structure_list.append(NestStructure(self, structure['value'], req, uuid = structure['object_key']))
+        for structure in pick_objects(self.user_data['objects'], 'structure'):
+            self.structure_list.append(NestStructure(self, structure['value'], self.user_data, uuid = structure['object_key']))
 
     def _make_request(self, url, data = None, headers = {}):
         if self.res is None:
@@ -394,6 +433,7 @@ def get_args():
     parser.add_option("-w", "--all-structures", dest="all_structures", action="store_true", default = False)
     parser.add_option("-d", "--debug", dest="debug", action="store_true", default = False)
     parser.add_option("-l", "--list", dest="list", action="store_true", default = False)
+    parser.add_option("-j", "--json", dest="json", default = False)
     parser.add_option("-r", "--rrd", dest="rrd", default = False)
 
     return parser.parse_args()
@@ -420,6 +460,13 @@ if __name__ == "__main__":
     settings = json.load(open("pynest.json", "r"))
 
     nest = NestAccount(settings['username'], settings['password'])
+
+    if options.json:
+        json_tmp = "%s.tmp" % options.json
+        json_fh = open(json_tmp, 'w')
+        json.dump(nest.user_data, json_fh, indent = 4)
+        json_fh.close()
+        os.rename(json_tmp, options.json)
 
     if options.list:
         print nest
