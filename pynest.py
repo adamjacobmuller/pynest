@@ -474,17 +474,12 @@ if __name__ == "__main__":
             print "    %s" % structure
             for thermostat in structure.thermostats():
                 print "        %s" % thermostat
-        sys.exit(0)
 
     if options.rrd:
-        print nest
         for structure in nest.structures():
             structure.to_rrd(options.rrd)
-            print "    %s" % structure
             for thermostat in structure.thermostats():
                 thermostat.to_rrd(options.rrd)
-                print "        %s" % thermostat
-        sys.exit(0)
 
     control = False
 
@@ -538,8 +533,10 @@ if __name__ == "__main__":
         for structure_kwargs in structures:
             for structure in nest.structures(**structure_kwargs):
                 nest_controls.append(structure)
+    elif options.list or options.rrd or options.json:
+        sys.exit(0)
     else:
-        print "Expecting a valid combination of -s/-t/-w/-u"
+        print "Expecting a valid combination of -s/-t/-w/-u or -l/-r/-j"
         sys.exit(1)
 
     print "Controlling:"
