@@ -30,31 +30,30 @@ class NothingToDo(Exception):
     pass
 
 
-def rrdupdate(base, filename, values):
-    filename = '%s/%s.rrd' % ( base, filename)
-    if os.path.exists(filename) is False:
-        rras = [
-            "RRA:AVERAGE:0.5:1:24000 ",
-            "RRA:AVERAGE:0.5:12:24000",
-            "RRA:AVERAGE:0.5:30:24000",
-            "RRA:AVERAGE:0.5:120:24000",
-            "RRA:AVERAGE:0.5:1440:24000",
-            "RRA:MIN:0.5:1:24000 ",
-            "RRA:MIN:0.5:12:24000",
-            "RRA:MIN:0.5:30:24000",
-            "RRA:MIN:0.5:120:24000",
-            "RRA:MIN:0.5:1440:24000",
-            "RRA:MAX:0.5:1:24000 ",
-            "RRA:MAX:0.5:12:24000",
-            "RRA:MAX:0.5:30:24000",
-            "RRA:MAX:0.5:120:24000",
-            "RRA:MAX:0.5:1440:24000"]
-        keys = ["DS:%s:GAUGE:120:U:U" % value[0][0:19] for value in values]
-        command = [ 'create', filename, '-s', '60'] + keys + rras
-        rrdtool(*command)
-    update = 'N:%s' % ':'.join([str(value[1]) for value in values])
-
-    rrdtool('update', filename, update)
+def rrdupdate(base, serial, values):
+    rras = [
+        "RRA:AVERAGE:0.5:1:24000 ",
+        "RRA:AVERAGE:0.5:12:24000",
+        "RRA:AVERAGE:0.5:30:24000",
+        "RRA:AVERAGE:0.5:120:24000",
+        "RRA:AVERAGE:0.5:1440:24000",
+        "RRA:MIN:0.5:1:24000 ",
+        "RRA:MIN:0.5:12:24000",
+        "RRA:MIN:0.5:30:24000",
+        "RRA:MIN:0.5:120:24000",
+        "RRA:MIN:0.5:1440:24000",
+        "RRA:MAX:0.5:1:24000 ",
+        "RRA:MAX:0.5:12:24000",
+        "RRA:MAX:0.5:30:24000",
+        "RRA:MAX:0.5:120:24000",
+        "RRA:MAX:0.5:1440:24000"
+    ]
+    for value in values:
+        filename = '%s/%s-%s.rrd' % ( base, serial, value[0])
+        if os.path.exists(filename) is False:
+            command = [ 'create', filename, '-s', '60', "DS:%s:GAUGE:120:U:U" % value[0][0:19]] + rras
+            rrdtool(*command)
+        rrdtool.update(filename, "N:%s" % value[1])
 
 
 def b2i(value):
@@ -126,7 +125,7 @@ class NestThermostat():
         rrdupdate(base_dir, "thermostat-%s" % self.serial, vars)
 
         vars.append(('target_temperature', self.shared['target_temperature']))
-        rrdupdate(base_dir, "thermostat-c-%s" % self.serial, vars)
+        rrdupdate(base_dir, self.serial, vars)
 
         if self.device['time_to_target'] > 0:
             self.device['time_to_target'] - time.time()
@@ -162,7 +161,7 @@ class NestThermostat():
             ('upper_safety_temp', self.device['upper_safety_temp']),
             ('lower_safety_temp', self.device['lower_safety_temp']),
         ]
-        rrdupdate(base_dir, "device-%s" % self.serial, device_vars)
+        rrdupdate(base_dir, self.serial, device_vars)
 
     def set_thermostat_shared(self, **kwargs):
         equal = True
