@@ -161,7 +161,7 @@ class NestThermostat():
             ('upper_safety_temp', self.device['upper_safety_temp']),
             ('lower_safety_temp', self.device['lower_safety_temp']),
         ]
-        rrdupdate(base_dir, self.serial, device_vars)
+        rrdupdate(base_dir, "device-%s" % self.serial, device_vars)
 
     def set_thermostat_shared(self, **kwargs):
         equal = True
@@ -433,6 +433,7 @@ def get_args():
     parser.add_option("-d", "--debug", dest="debug", action="store_true", default = False)
     parser.add_option("-l", "--list", dest="list", action="store_true", default = False)
     parser.add_option("-j", "--json", dest="json", default = False)
+    parser.add_option("-c", "--config", dest="config", default = 'pynest.json')
     parser.add_option("-r", "--rrd", dest="rrd", default = False)
 
     return parser.parse_args()
@@ -456,7 +457,7 @@ if __name__ == "__main__":
         opener = urllib2.build_opener(handler)
         urllib2.install_opener(opener)
 
-    settings = json.load(open("pynest.json", "r"))
+    settings = json.load(open(options.config, "r"))
 
     nest = NestAccount(settings['username'], settings['password'])
 
